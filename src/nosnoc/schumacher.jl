@@ -1,3 +1,10 @@
+# Adapted from NOSBENCH
+# https://github.com/nosnoc/nosbench
+#
+# Nurkanović, A., Pozharskiy, A. & Diehl, M.
+# Solving Mathematical Programs with Complementarity Constraints Arising in Nonsmooth Optimal Control.
+# Vietnam J. Math. 53, 659–697 (2025).
+# https://doi.org/10.1007/s10013-024-00704-z
 
 
 function _schumacher_track(x)
@@ -8,13 +15,13 @@ function _schumacher_track(x)
 end
 
 """
-    nosnoc_schumacher_fesd_model(N, nfe, rk)
+    nosnoc_schumacher_model
 
-A minimum-time optimal control problem with switch detection from [1].
+A minimum-time optimal control problem with switch detection.
 
 ## Reference
 
-[1] David E. Stewart Mihai Anitescu
+David E. Stewart Mihai Anitescu.
 "Optimal control of systems with discontinuous differential equations", 2012.
 
 """
@@ -39,12 +46,11 @@ function nosnoc_schumacher_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:lcc)
     x_tracks = range(0.0, target[1], nh)
     y_tracks = range(0.0, target[2], nh)
 
-    # TODO
     qx0 = range(0, target[1], nh+1)
     qy0 = range(0, target[2], nh+1)
 
     model = Model()
-    JuMP.set_name(model, "NOSNOC-Schumacher")
+    JuMP.set_name(model, "NOSNOC-SCHUMI")
     # State
     @variable(model, qx[i=1:(nh+1), j=1:(nc+1)], start=qx0[i])
     @variable(model, qy[i=1:(nh+1), j=1:(nc+1)], start=qy0[i])
@@ -58,12 +64,12 @@ function nosnoc_schumacher_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:lcc)
     @variable(model, hmin <= h[1:nfe, 1:N] <= hmax, start=T_numerics/nh)
     @variable(model, sot_min <= sot <= sot_max, start=T_guess)
     # Stewart's multipliers
-    @variable(model, 0.0 <= θ[1:nh, 1:nc, 1:nf], start=0.5)
-    @variable(model, 0.0 <= λ[1:nh, 0:nc, 1:nf], start=1.0)
+    @variable(model, 0.0 <= θ[1:nh, 1:nc, 1:nf])
+    @variable(model, 0.0 <= λ[1:nh, 0:nc, 1:nf])
     @variable(model, μ[1:nh, 0:nc])
     # Switch detection
-    @variable(model, 0.0 <= λs[1:nh, 1:nf], start=0.5)
-    @variable(model, 0.0 <= θs[1:nh, 1:nf], start=1.0)
+    @variable(model, 0.0 <= λs[1:nh, 1:nf])
+    @variable(model, 0.0 <= θs[1:nh, 1:nf])
     if step_eq == :lcc
         @variable(model, 0.0 <= πλ[1:(nh-1), 1:nf])
         @variable(model, 0.0 <= πθ[1:(nh-1), 1:nf])
@@ -94,9 +100,7 @@ function nosnoc_schumacher_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:lcc)
         -sin(phi[i, j]) * vx[i, j] + cos(phi[i, j]) * vy[i, j]
     )
     # Initial position for multipliers
-    # TODO
-    # @constraint(model, μ[1, 0] == 0.0) # N.B: assume initial position is negative
-    @constraint(model, λ[1, 0, 1] == g[1, 1] - μ[1, 0])
+    @constraint(model, λ[1, 0, 1] ==  g[1, 1] - μ[1, 0])
     @constraint(model, λ[1, 0, 2] == -g[1, 1] - μ[1, 0])
     # Dynamics
     @expressions(
@@ -156,7 +160,7 @@ function nosnoc_schumacher_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:lcc)
     # w.r.t dual variables
     @constraints(model, begin
         [i=1:(nh-1), j=1:nf], λ[i, nc, j] == λ[i+1, 0, j]
-        # [i=1:nh-1], μ[i, nc] == μ[i+1, 0]
+        [i=1:nh-1], μ[i, nc] == μ[i+1, 0]
     end)
     # State constraints
     @constraints(
@@ -169,7 +173,7 @@ function nosnoc_schumacher_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:lcc)
     # Stewart model
     @constraints(model, begin
         [i=1:nh, j=1:nc], sum(θ[i, j, k] for k in 1:nf) == 1.0
-        [i=1:nh, j=0:nc], g[i, j+1] - λ[i, j, 1] - μ[i, j] == 0
+        [i=1:nh, j=0:nc],  g[i, j+1] - λ[i, j, 1] - μ[i, j] == 0
         [i=1:nh, j=0:nc], -g[i, j+1] - λ[i, j, 2] - μ[i, j] == 0
     end)
     # Switch detection
@@ -178,7 +182,7 @@ function nosnoc_schumacher_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:lcc)
         begin
             [t=1:nh, j=1:nf], sum(θ[t, i, j] for i in 1:nc) == θs[t, j]
             [t=1:nh, j=1:nf], sum(λ[t, i, j] for i in 0:nc) == λs[t, j]
-            [t=1:nh, i=1:nc, j=1:nf], [θ[t, i, j], λs[t, i]] ∈ MOI.Complements(2)
+            [t=1:nh, i=1:nc, j=1:nf], [θ[t, i, j], λs[t, j]] ∈ MOI.Complements(2)
         end
     )
 
