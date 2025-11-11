@@ -10,6 +10,6 @@ using Ipopt
 end
 
 @testset "Power systems" begin
-    include("scopf.jl")
+    include("powersystems.jl")
 end
 

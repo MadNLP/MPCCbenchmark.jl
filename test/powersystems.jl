@@ -1,6 +1,11 @@
 
-
+using Test
+using MPCCBenchmark
+using JuMP
+using ComplementOpt
+using Ipopt
 using PowerModels
+using ExaPowerIO
 
 PowerModels.silence()
 
@@ -20,11 +25,17 @@ function case14_scopf_model()
     )
 end
 
+function case14_pf_model()
+    file_name = joinpath(@__DIR__, "case14.m")
+    return MPCCBenchmark.powerflow_model(ExaPowerIO.parse_matpower(file_name))
+end
+
 @testset "[PowerSystems] Test model $(JuMP.name(model))" for model in [
     case14_scopf_model(),
+    case14_pf_model(),
 ]
     ind_cc1, ind_cc2 = ComplementOpt.reformulate_to_vertical!(JuMP.backend(model))
-    ComplementOpt.reformulate_as_nonlinear_program!(JuMP.backend(model); relaxation=1e-5)
+    ComplementOpt.reformulate_as_nonlinear_program!(JuMP.backend(model), ComplementOpt.ScholtesRelaxation(1e-5))
 
     JuMP.set_optimizer(model, Ipopt.Optimizer)
     JuMP.set_optimizer_attribute(model, "mu_strategy", "adaptive")
