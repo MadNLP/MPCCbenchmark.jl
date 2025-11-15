@@ -13,3 +13,7 @@ end
     include("powersystems.jl")
 end
 
+@testset "EPEC" begin
+    include("epec.jl")
+end
+
