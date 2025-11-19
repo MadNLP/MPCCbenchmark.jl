@@ -1,24 +1,4 @@
 
-#=
-    Implement corrective SCOPF.
-=#
-
-function _calc_branch_t(branch::Dict{String,<:Any})
-    tap_ratio = branch["tap"]
-    angle_shift = branch["shift"]
-
-    tr = tap_ratio .* cos.(angle_shift)
-    ti = tap_ratio .* sin.(angle_shift)
-
-    return tr, ti
-end
-
-function _calc_branch_y(branch::Dict{String,<:Any})
-    y = LinearAlgebra.pinv(branch["br_r"] + im * branch["br_x"])
-    g, b = real(y), imag(y)
-    return g, b
-end
-
 """
     scopf_model(data, contingencies)
 
@@ -36,122 +16,157 @@ function scopf_model(
     scale_obj=1e-4,
     load_factor=1.0,
 )
-    ngen = length(data[:gen])
+    nbus = length(data.bus)
+    ngen = length(data.gen)
+    nbranch = length(data.branch)
+    narc = length(data.arc)
     alpha = ones(ngen)
 
-    # Parse contingencies
+    pv_buses = [k for k in 1:nbus if data.bus[k].type == 2]
+    ref_buses = [k for k in 1:nbus if data.bus[k].type == 3]
+    npv = length(pv_buses)
+
+    # Pre-processing
+    connected_arcs = [Int[] for k in 1:nbus]
+    for (k, arc) in enumerate(data.arc)
+        b = arc.bus
+        push!(connected_arcs[b], k)
+    end
+    connected_gens = [Int[] for k in 1:nbus]
+    qmin = zeros(nbus)
+    qmax = zeros(nbus)
+    qg0 = zeros(nbus)
+    for (k, gen) in enumerate(data.gen)
+        b = gen.bus
+        push!(connected_gens[b], k)
+        # Aggregate reactive power generations
+        qmin[b] += gen.qmin
+        qmax[b] += gen.qmax
+        qg0[b] += gen.qg
+    end
+
+    # Total number of scenarios
     K = length(contingencies) + 1
 
     # Build model
     model = JuMP.Model()
     JuMP.set_name(model, "Corrective-AC-SCOPF")
 
-    JuMP.@variable(model, va[i in keys(data[:bus]), 1:K])
-    JuMP.@variable(model, data[:bus][i]["vmin"] <= vm[i in keys(data[:bus]), 1:K] <= data[:bus][i]["vmax"], start=1.0)
-    JuMP.@variable(model, data[:gen][i]["pmin"] <= pg[i in keys(data[:gen]), 1:K] <= data[:gen][i]["pmax"])
-    JuMP.@variable(model, data[:gen][i]["qmin"] <= qg[i in keys(data[:gen]), 1:K] <= data[:gen][i]["qmax"])
-    JuMP.@variable(model, -data[:branch][l]["rate_a"] <= p[(l,i,j) in data[:arcs], 1:K] <= data[:branch][l]["rate_a"])
-    JuMP.@variable(model, -data[:branch][l]["rate_a"] <= q[(l,i,j) in data[:arcs], 1:K] <= data[:branch][l]["rate_a"])
-    JuMP.@variable(model, 0.0 <= ρp[i in keys(data[:gen]), 2:K])
-    JuMP.@variable(model, 0.0 <= ρn[i in keys(data[:gen]), 2:K])
-    JuMP.@variable(model, 0.0 <= vp[i in keys(data[:gen]), 2:K])
-    JuMP.@variable(model, 0.0 <= vn[i in keys(data[:gen]), 2:K])
-
+    JuMP.@variable(model, va[i in 1:nbus, 1:K], start=deg2rad(data.bus[i].va))
+    JuMP.@variable(model, data.bus[i].vmin <= vm[i in 1:nbus, 1:K] <= data.bus[i].vmax, start=data.bus[i].vm)
+    JuMP.@variable(model, data.gen[i].pmin <= pg[i in 1:ngen, 1:K] <= data.gen[i].pmax, start=data.gen[i].pg)
+    # N.B. Aggregate the reactive power generations for the PV/PQ switches
+    JuMP.@variable(model, qmin[i] <= qg[i in [ref_buses; pv_buses], 1:K] <= qmax[i], start=qg0[i])
+    JuMP.@variable(model, -data.arc[i].rate_a <= p[i in 1:narc, 1:K] <= data.arc[i].rate_a)
+    JuMP.@variable(model, -data.arc[i].rate_a <= q[i in 1:narc, 1:K] <= data.arc[i].rate_a)
     # Automatic adjustment of generators
     JuMP.@variable(model, Δ[1:K-1])
+    # Switches
+    JuMP.@variable(model, γ[i in 1:ngen, 2:K])
+    JuMP.@variable(model, λ[i in [ref_buses; pv_buses], 2:K])
 
-    JuMP.@objective(model, Min, scale_obj * sum(gen["cost"][1]*pg[i, 1]^2 + gen["cost"][2]*pg[i, 1] + gen["cost"][3] for (i,gen) in data[:gen]))
+    JuMP.@objective(model, Min, scale_obj * sum(data.gen[i].c[1]*pg[i, 1]^2 + data.gen[i].c[2]*pg[i, 1] + data.gen[i].c[3] for i in 1:ngen))
 
     for k in 2:K
         # Droop control
-        for (j, i) in enumerate(keys(data[:gen]))
-            pmin, pmax = data[:gen][i]["pmin"], data[:gen][i]["pmax"]
-            @constraint(model, ρp[i, k] - ρn[i, k] == pg[i, k] - pg[i, 1] - alpha[j] * Δ[k-1])
-            @constraint(model, [(pmax - pg[i, k]), ρn[i, k]] in MOI.Complements(2))
-            @constraint(model, [(pg[i, k] - pmin), ρp[i, k]] in MOI.Complements(2))
+        for i in 1:ngen
+            @constraint(model, pg[i, k] == pg[i, 1] + alpha[i] * Δ[k-1] + γ[i, k])
+            @constraint(model, [γ[i, k], pg[i, k]] in MOI.Complements(2))
         end
-        # Voltage magnitude are not adjusted at PV buses
-        for g in keys(data[:gen])
-            b = data[:gen][g]["gen_bus"]
-            qmin, qmax = data[:gen][g]["qmin"], data[:gen][g]["qmax"]
-            @constraint(model, vp[g, k] - vn[g, k] == vm[b, k] - vm[b, 1])
-            if isfinite(qmax)
-                @constraint(model, [(qmax - qg[g, k]), vn[g, k]] in MOI.Complements(2))
-            end
-            if isfinite(qmin)
-                @constraint(model, [(qg[g, k] - qmin), vp[g, k]] in MOI.Complements(2))
-            end
-        end
-        # Set flux to 0
-        for (l, i, j) in data[:arcs]
-            if l == contingencies[k-1]
-                @constraint(model, p[(l, i, j), k] == 0.0)
-                @constraint(model, q[(l, i, j), k] == 0.0)
-            end
+        # PV/PQ switches
+        # N.B. : we allow the reference buses to switch as well
+        for b in [ref_buses; pv_buses]
+            @constraint(model, vm[b, k] == vm[b, 1] + λ[b, k])
+            @constraint(model, [λ[b, k], qg[b, k]] in MOI.Complements(2))
         end
     end
 
     for k in 1:K
-        for (i, bus) in data[:ref_buses]
+        for i in ref_buses
             JuMP.@constraint(model, va[i, k] == 0)
         end
 
-        for (i,bus) in data[:bus]
-            bus_loads = [data[:load][l] for l in data[:bus_loads][i]]
-            bus_shunts = [data[:shunt][s] for s in data[:bus_shunts][i]]
-
+        for b in 1:nbus
             JuMP.@constraint(model,
-                sum(p[a, k] for a in data[:bus_arcs][i]) ==
-                sum(pg[g, k] for g in data[:bus_gens][i]) -
-                sum(load_factor * load["pd"] for load in bus_loads) -
-                sum(shunt["gs"] for shunt in bus_shunts)*vm[i, k]^2
+                sum(p[a, k] for a in connected_arcs[b]) ==
+                sum(pg[g, k] for g in connected_gens[b])
+                - load_factor * data.bus[b].pd
+                - data.bus[b].gs * vm[b, k]^2
             )
-
-            JuMP.@constraint(model,
-                sum(q[a, k] for a in data[:bus_arcs][i]) ==
-                sum(qg[g, k] for g in data[:bus_gens][i]) -
-                sum(load_factor * load["qd"] for load in bus_loads) +
-                sum(shunt["bs"] for shunt in bus_shunts)*vm[i, k]^2
-            )
+            if data.bus[b].type == 1
+                JuMP.@constraint(model,
+                    sum(q[a, k] for a in connected_arcs[b]) ==
+                    - load_factor * data.bus[b].qd
+                    + data.bus[b].bs * vm[b, k]^2
+                )
+            else
+                JuMP.@constraint(model,
+                    sum(q[a, k] for a in connected_arcs[b]) ==
+                    qg[b, k]
+                    - load_factor * data.bus[b].qd
+                    + data.bus[b].bs * vm[b, k]^2
+                )
+            end
         end
 
         # Branch power flow physics and limit constraints
-        for (i,branch) in data[:branch]
-            if (k >= 2) && i == contingencies[k-1]
-                continue
-            end
-            f_idx = (i, branch["f_bus"], branch["t_bus"])
-            t_idx = (i, branch["t_bus"], branch["f_bus"])
+        for l in data.branch
+            f_idx = l.f_idx
+            t_idx = l.t_idx
 
             p_fr = p[f_idx, k]
             q_fr = q[f_idx, k]
             p_to = p[t_idx, k]
             q_to = q[t_idx, k]
 
-            vm_fr = vm[branch["f_bus"], k]
-            vm_to = vm[branch["t_bus"], k]
-            va_fr = va[branch["f_bus"], k]
-            va_to = va[branch["t_bus"], k]
+            if (k >= 2) && l.i == contingencies[k-1]
+                # Set flux to 0
+                @constraint(model, p_fr == 0.0)
+                @constraint(model, q_fr == 0.0)
+                @constraint(model, p_to == 0.0)
+                @constraint(model, q_to == 0.0)
+            else
 
-            g, b = _calc_branch_y(branch)
-            tr, ti = _calc_branch_t(branch)
-            ttm = tr^2 + ti^2
-            g_fr = branch["g_fr"]
-            b_fr = branch["b_fr"]
-            g_to = branch["g_to"]
-            b_to = branch["b_to"]
+                vm_fr = vm[l.f_bus, k]
+                vm_to = vm[l.t_bus, k]
+                va_fr = va[l.f_bus, k]
+                va_to = va[l.t_bus, k]
 
-            # From side of the branch flow
-            JuMP.@constraint(model, p_fr ==  (g+g_fr)/ttm*vm_fr^2 + (-g*tr+b*ti)/ttm*(vm_fr*vm_to*cos(va_fr-va_to)) + (-b*tr-g*ti)/ttm*(vm_fr*vm_to*sin(va_fr-va_to)) )
-            JuMP.@constraint(model, q_fr == -(b+b_fr)/ttm*vm_fr^2 - (-b*tr-g*ti)/ttm*(vm_fr*vm_to*cos(va_fr-va_to)) + (-g*tr+b*ti)/ttm*(vm_fr*vm_to*sin(va_fr-va_to)) )
+                # FR
+                JuMP.@constraint(
+                    model,
+                    p_fr - l.c5*vm_fr^2
+                    - l.c3 * (vm_fr * vm_to * cos(va_fr - va_to)) - l.c4 * (vm_fr * vm_to * sin(va_fr - va_to))
+                    == 0.0
+                )
+                JuMP.@constraint(
+                    model,
+                    q_fr + l.c6*vm_fr^2
+                    + l.c4 * (vm_fr * vm_to * cos(va_fr - va_to))
+                    - l.c3 * (vm_fr * vm_to * sin(va_fr - va_to))
+                    == 0.0
+                )
 
-            # To side of the branch flow
-            JuMP.@constraint(model, p_to ==  (g+g_to)*vm_to^2 + (-g*tr-b*ti)/ttm*(vm_to*vm_fr*cos(va_to-va_fr)) + (-b*tr+g*ti)/ttm*(vm_to*vm_fr*sin(va_to-va_fr)) )
-            JuMP.@constraint(model, q_to == -(b+b_to)*vm_to^2 - (-b*tr+g*ti)/ttm*(vm_to*vm_fr*cos(va_to-va_fr)) + (-g*tr-b*ti)/ttm*(vm_to*vm_fr*sin(va_to-va_fr)) )
+                # TO
+                JuMP.@constraint(
+                    model,
+                    p_to - l.c7*vm_to^2
+                    - l.c1 * (vm_to * vm_fr * cos(va_to - va_fr))
+                    - l.c2 * (vm_to * vm_fr * sin(va_to - va_fr))
+                    == 0.0
+                )
+                JuMP.@constraint(
+                    model,
+                    q_to + l.c8*vm_to^2
+                    + l.c2 * (vm_to * vm_fr * cos(va_to - va_fr))
+                    - l.c1 * (vm_to * vm_fr * sin(va_to - va_fr))
+                    == 0.0
+                )
 
-            # Apparent power limit, from side and to side
-            JuMP.@constraint(model, p_fr^2 + q_fr^2 <= branch["rate_a"]^2)
-            JuMP.@constraint(model, p_to^2 + q_to^2 <= branch["rate_a"]^2)
+                # Apparent power limit, from side and to side
+                JuMP.@constraint(model, p_fr^2 + q_fr^2 <= l.rate_a^2)
+                JuMP.@constraint(model, p_to^2 + q_to^2 <= l.rate_a^2)
+            end
         end
     end
 

@@ -2,10 +2,10 @@ module MPCCBenchmark
 
 using LinearAlgebra
 using JuMP
+import ExaPowerIO
 
 include("nosnoc/NOSNOC.jl")
-include("powersystems/scopf.jl")
-include("powersystems/pf.jl")
 include("epec/macepec.jl")
+include("powersystems/powersystems.jl")
 
 end
