@@ -18,7 +18,7 @@ Howell, Taylor A., et al.
 IEEE Robotics and Automation Letters 7.3 (2022): 6750-6757.
 
 """
-function nosnoc_cart_pole_with_friction_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:lcc, relax=1e-5)
+function nosnoc_cart_pole_with_friction_model(N, nfe, rk::RKScheme; big_M=1e5, rho_h=1e0, step_eq=:heuristic_mean)
     nh = N * nfe      # total number of finite elements
     nf = 2            # total number of nonsmooth modes
     nc = length(rk.c) # total number of intermediate integration points
@@ -186,7 +186,7 @@ function nosnoc_cart_pole_with_friction_model(N, nfe, rk::RKScheme; big_M=1e5, s
         )
         @expression(model, step_eq_cost, 0)
     elseif step_eq == :heuristic_mean
-        @expression(model, step_eq_cost, sum(1*(h .- (T/nh)) .^ 2))
+        @expression(model, step_eq_cost, rho_h * sum(1*(h .- (T/nh)) .^ 2))
     end
     @constraint(model, [j=1:N], sum(h[i, j] for i in 1:nfe) == T / N)
 

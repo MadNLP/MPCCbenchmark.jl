@@ -25,7 +25,7 @@ David E. Stewart Mihai Anitescu.
 "Optimal control of systems with discontinuous differential equations", 2012.
 
 """
-function nosnoc_schumacher_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:lcc)
+function nosnoc_schumacher_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:heuristic_mean, rho_h=1e0)
     nh = N * nfe      # total number of finite elements
     nf = 2            # total number of nonsmooth modes
     nc = length(rk.c) # total number of intermediate integration points
@@ -217,11 +217,11 @@ function nosnoc_schumacher_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:lcc)
         )
         @expression(model, step_eq_cost, 0)
     elseif step_eq == :heuristic_mean
-        @expression(model, step_eq_cost, sum(1*(h .- (T_numerics/nh)) .^ 2))
+        @expression(model, step_eq_cost, rho_h * sum(1*(h .- (T_numerics/nh)) .^ 2))
     end
     @constraint(model, [j=1:N], sum(h[i, j] for i in 1:nfe) == T_numerics / N)
 
-    @objective(model, Min, terminal_cost + step_eq_cost)
+    @objective(model, Min, terminal_cost + 1000.0 * step_eq_cost)
     return model
 end
 

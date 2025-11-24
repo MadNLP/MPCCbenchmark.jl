@@ -49,6 +49,7 @@ function nosnoc_stewart_anitescu_model(nh, rk::RKScheme; big_M=1e5)
     @constraint(model, x[1, 1] == -2.0)
     @constraint(model, y[1, 1] == 0.0)
     # Initial position for multipliers
+    # @constraint(model, μ[1, 0] == x[1, 1]) # N.B: assume initial position is negative
     @constraint(model, λ[1, 0, 1] ==  x[1, 1] - μ[1, 0])
     @constraint(model, λ[1, 0, 2] == -x[1, 1] - μ[1, 0])
     # Dynamics
@@ -70,6 +71,7 @@ function nosnoc_stewart_anitescu_model(nh, rk::RKScheme; big_M=1e5)
     # w.r.t dual variables
     @constraints(model, begin
         [t=1:nh-1, j=1:nf], λ[t, nc, j] == λ[t+1, 0, j]
+        # [t=1:nh-1], μ[t, nc] == μ[t+1, 0]
     end)
     # Stewart model
     @constraints(model, begin
@@ -84,6 +86,7 @@ function nosnoc_stewart_anitescu_model(nh, rk::RKScheme; big_M=1e5)
         [t=1:nh, j=1:nf], sum(θ[t, i, j] for i in 1:nc) == θs[t, j]
         [t=1:nh, j=1:nf], sum(λ[t, i, j] for i in 0:nc) == λs[t, j]
         [t=1:nh, i=1:nc, j=1:nf], [θ[t, i, j], λs[t, j]] ∈ MOI.Complements(2)
+        # [t=1:nh, i=1:nc, j=1:nf], θ[t, i, j] * λs[t, j] <= 1e-6
     end)
     # Logical constraints
     @constraints(model, begin
@@ -101,6 +104,7 @@ function nosnoc_stewart_anitescu_model(nh, rk::RKScheme; big_M=1e5)
         [t=1:nh-1, j=1:nf], v[t, j] >= πθ[t, j] - τ1[t, j]
         [t=1:nh-1, j=1:nf], πθ[t, j] - πλ[t, j] == τ1[t, j] - τ2[t, j]
         [t=1:nh-1, j=1:nf], [τ1[t, j], τ2[t, j]] ∈ MOI.Complements(2)
+        # [t=1:nh-1, j=1:nf], τ1[t, j] * τ2[t, j] <= 1e-6
     end)
     # Step equilibration
     @constraints(model, begin

@@ -4,16 +4,12 @@ using MPCCBenchmark
 using JuMP
 using ComplementOpt
 using Ipopt
-using PowerModels
 using ExaPowerIO
 
-PowerModels.silence()
-
 function import_data(file_name)
-    data = PowerModels.parse_file(file_name)
-    PowerModels.standardize_cost_terms!(data, order=2)
-    PowerModels.calc_thermal_limits!(data)
-    return PowerModels.build_ref(data)[:it][:pm][:nw][0]
+    data = ExaPowerIO.parse_matpower(file_name)
+    MPCCBenchmark.compute_branch_limits!(data)
+    return data
 end
 
 function case14_scopf_model()
@@ -27,7 +23,9 @@ end
 
 function case14_pf_model()
     file_name = joinpath(@__DIR__, "case14.m")
-    return MPCCBenchmark.powerflow_model(ExaPowerIO.parse_matpower(file_name))
+    return MPCCBenchmark.powerflow_model(
+        import_data(file_name),
+    )
 end
 
 @testset "[PowerSystems] Test model $(JuMP.name(model))" for model in [
