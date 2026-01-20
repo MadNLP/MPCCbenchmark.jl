@@ -3,6 +3,7 @@ using MPCCBenchmark
 using ComplementOpt
 using Ipopt
 using Plots
+using HSL_jll
 
 ######
 # Import problem from MPCCBenchmark
@@ -15,21 +16,18 @@ collocation = MPCCBenchmark.ImplicitEuler()  # RADAU_IIA with n_s=2 in MATLAB
 model = MPCCBenchmark.nosnoc_acrobot_model(N, nfe, collocation; step_eq=:heuristic_mean)
 
 ######
-# Reformulate problem as a nonlinear program with ComplementOpt
-######
-ind_cc1, ind_cc2 = ComplementOpt.reformulate_to_vertical!(JuMP.backend(model))
-ComplementOpt.reformulate_as_nonlinear_program!(JuMP.backend(model), ComplementOpt.ScholtesRelaxation(1e-2))
-
-######
 # Solve problem with Ipopt
 ######
-JuMP.set_optimizer(model, Ipopt.Optimizer)
+JuMP.set_optimizer(model, () -> ComplementOpt.Optimizer(Ipopt.Optimizer()))
+MOI.set(model, ComplementOpt.RelaxationMethod(), ComplementOpt.ScholtesRelaxation(1e-5))
 JuMP.set_optimizer_attribute(model, "mu_strategy", "adaptive")
 JuMP.set_optimizer_attribute(model, "bound_relax_factor", 0.0)
 JuMP.set_optimizer_attribute(model, "bound_push", 1e-2)
 JuMP.set_optimizer_attribute(model, "max_iter", 5000)
 JuMP.set_optimizer_attribute(model, "tol", 1e-6)
 JuMP.set_optimizer_attribute(model, "print_level", 5)
+JuMP.set_optimizer_attribute(model, "linear_solver", "ma27")
+JuMP.set_optimizer_attribute(model, "hsllib", HSL_jll.libhsl)
 JuMP.optimize!(model)
 
 ######

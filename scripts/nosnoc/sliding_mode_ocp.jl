@@ -11,18 +11,13 @@ using Plots
 N = 60
 nfe = 3
 collocation = MPCCBenchmark.ImplicitEuler()
-model = MPCCBenchmark.nosnoc_sliding_mode_ocp_model(N, nfe, collocation; step_eq=:heuristic_mean)
-
-######
-# Reformulate problem as a nonlinear program with ComplementOpt
-######
-ind_cc1, ind_cc2 = ComplementOpt.reformulate_to_vertical!(JuMP.backend(model))
-ComplementOpt.reformulate_as_nonlinear_program!(JuMP.backend(model), ComplementOpt.ScholtesRelaxation(1e-6))
+model = MPCCBenchmark.nosnoc_sliding_mode_ocp_model(N, nfe, collocation; step_eq=:heuristic_mean, rho_h=1e4)
 
 ######
 # Solve problem with Ipopt
 ######
-JuMP.set_optimizer(model, Ipopt.Optimizer)
+JuMP.set_optimizer(model, () -> ComplementOpt.Optimizer(Ipopt.Optimizer()))
+MOI.set(model, ComplementOpt.RelaxationMethod(), ComplementOpt.ScholtesRelaxation(1e-6))
 JuMP.set_optimizer_attribute(model, "mu_strategy", "adaptive")
 JuMP.set_optimizer_attribute(model, "bound_relax_factor", 0.0)
 JuMP.set_optimizer_attribute(model, "bound_push", 1e-1)
@@ -84,6 +79,6 @@ plot!(tm[1:end-1], λ2, subplot=4, label="λ2")
 title!("Stewart multipliers λ", subplot=4)
 xlabel!("Time", subplot=4)
 
-plot!(tm[1:end-1], h, label=nothing, subplot=6)
+# plot!(tm[1:end-1], h, label=nothing, subplot=6)
 title!("Timestep Δh", subplot=6)
 xlabel!("Time", subplot=6)

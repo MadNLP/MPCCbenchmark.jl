@@ -32,12 +32,10 @@ end
     case14_scopf_model(),
     case14_pf_model(),
 ]
-    ind_cc1, ind_cc2 = ComplementOpt.reformulate_to_vertical!(JuMP.backend(model))
-    ComplementOpt.reformulate_as_nonlinear_program!(JuMP.backend(model), ComplementOpt.ScholtesRelaxation(1e-5))
-
-    JuMP.set_optimizer(model, Ipopt.Optimizer)
+    JuMP.set_optimizer(model, () -> ComplementOpt.Optimizer(Ipopt.Optimizer()))
+    MOI.set(model, ComplementOpt.RelaxationMethod(), ComplementOpt.ScholtesRelaxation(1e-7))
     JuMP.set_optimizer_attribute(model, "mu_strategy", "adaptive")
-    JuMP.set_silent(model)
+    JuMP.set_optimizer_attribute(model, "bound_relax_factor", 0.0)
     JuMP.optimize!(model)
 
     @test JuMP.is_solved_and_feasible(model)

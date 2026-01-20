@@ -12,21 +12,18 @@ using Plots
 # Import problem from MPCCBenchmark
 ######
 N = 100
-nfe = 3
-collocation = MPCCBenchmark.CrankNicolson()
-model = MPCCBenchmark.nosnoc_schumacher_model(N, nfe, collocation; step_eq=:heuristic_mean)
+nfe = 2
+collocation = MPCCBenchmark.RadauIIA(1)
+model = MPCCBenchmark.nosnoc_schumacher_model(N, nfe, collocation; step_eq=:lcc, big_M=1e-2)
 
 ######
 # Reformulate problem in vertical form with ComplementOpt
 ######
-ind_cc1, ind_cc2 = ComplementOpt.reformulate_to_vertical!(JuMP.backend(model))
+ind_cc1, ind_cc2 = reformulate_to_vertical!(model)
 
 ######
 # Convert problem in MadMPEC format
 ######
-# Remove complementarity constraints
-cc_cons = MOI.get(model, MOI.ListOfConstraintIndices{MOI.VectorOfVariables, MOI.Complements}())[1]
-MOI.delete(JuMP.backend(model), cc_cons)
 # Get evaluator as NLPModels
 nlp = MathOptNLPModel(model)
 # Build a MPCC problem
@@ -37,9 +34,6 @@ mpcc = MadMPEC.MPCCModelVarVar(nlp, getfield.(ind_cc1, :value), getfield.(ind_cc
 #####
 madnlpc_opts = MadMPEC.MadNLPCOptions(;
     print_level=MadNLP.INFO,
-    use_mpecopt=false,
-    phase_I_oracle=:naive,
-    eps_proj=1e-6,
     relaxation=MadMPEC.ScholtesRelaxation,
     use_magic_step=false,
     use_specialized_barrier_update=false,

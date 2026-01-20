@@ -15,15 +15,10 @@ collocation = MPCCBenchmark.ImplicitEuler()
 model = MPCCBenchmark.nosnoc_motor_with_friction_model(N, nfe, collocation; step_eq=:heuristic_mean)
 
 ######
-# Reformulate problem as a nonlinear program with ComplementOpt
-######
-ind_cc1, ind_cc2 = ComplementOpt.reformulate_to_vertical!(JuMP.backend(model))
-ComplementOpt.reformulate_as_nonlinear_program!(JuMP.backend(model), ComplementOpt.ScholtesRelaxation(1e-6))
-
-######
 # Solve problem with Ipopt
 ######
-JuMP.set_optimizer(model, Ipopt.Optimizer)
+JuMP.set_optimizer(model, () -> ComplementOpt.Optimizer(Ipopt.Optimizer()))
+MOI.set(model, ComplementOpt.RelaxationMethod(), ComplementOpt.ScholtesRelaxation(1e-6))
 JuMP.set_optimizer_attribute(model, "mu_strategy", "adaptive")
 JuMP.set_optimizer_attribute(model, "bound_relax_factor", 0.0)
 JuMP.set_optimizer_attribute(model, "bound_push", 1e-2)
