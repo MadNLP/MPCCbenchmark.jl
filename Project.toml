@@ -5,11 +5,13 @@ version = "0.1.0"
 [deps]
 ComplementOpt = "3144fb79-1414-4d28-b1d1-63dadd798e24"
 ExaPowerIO = "14903efe-9500-4d7f-a589-7ab7e15da6de"
+HiGHS = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [compat]
 ComplementOpt = "0.1.0"
-JuMP = "1.29.2"
 ExaPowerIO = "0.3.0"
+HiGHS = "1.20.1"
+JuMP = "1.29.2"
 LinearAlgebra = "1.11.0"
