@@ -9,7 +9,7 @@ using JuMP
 #const MOI = JuMP.MathOptInterface
 
 """
-    nosnoc_liquid_gas_tank_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:lcc, relax=1e-5)
+    nosnoc_liquid_gas_tank_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:lcc)
 
 Hybrid OCP for the ideal gas–liquid tank with a pressure control valve.
 
@@ -20,7 +20,7 @@ Two modes (PSS/Stewart):
 Switching function:
     c(x) = M_L/ρ_L - V_s
 """
-function nosnoc_liquid_gas_tank_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:lcc, relax=1e-5)
+function nosnoc_liquid_gas_tank_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:heuristic_mean, rho_h=1e0)
     nh = N * nfe      # total number of finite elements
     nf = 2            # number of nonsmooth modes
     nc = length(rk.c) # collocation points per FE
@@ -29,7 +29,7 @@ function nosnoc_liquid_gas_tank_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:
     T = 25.0
     hmin, hmax = 0.0 / nh, 2.0 * T / nh
 
-    # Parameters 
+    # Parameters
     F_L   = 2.5
     F_G   = 0.1
     V     = 10.0
@@ -195,7 +195,7 @@ function nosnoc_liquid_gas_tank_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:
         )
         @expression(model, step_eq_cost, 0.0)
     elseif step_eq == :heuristic_mean
-        @expression(model, step_eq_cost, sum((h .- (T / nh)) .^ 2))
+        @expression(model, step_eq_cost, rho_h * sum((h .- (T / nh)) .^ 2))
     else
         @expression(model, step_eq_cost, 0.0)
     end

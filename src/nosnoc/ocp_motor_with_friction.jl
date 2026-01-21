@@ -18,7 +18,7 @@ Christiansen, Bahne, Helmut Maurer, and Oliver Zirn.
 2008 47th IEEE conference on decision and control. IEEE, 2008.
 
 """
-function nosnoc_motor_with_friction_model(N, nfe, rk::RKScheme; big_M=1e5, rho_h=1e0, step_eq=:heuristic_mean)
+function nosnoc_motor_with_friction_model(N, nfe, rk::RKScheme; big_M=1e5, rho_h=1e5, step_eq=:heuristic_mean)
     nh = N * nfe      # total number of finite elements
     nf = 2            # total number of nonsmooth modes
     nc = length(rk.c) # total number of intermediate integration points

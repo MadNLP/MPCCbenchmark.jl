@@ -19,7 +19,7 @@ Nurkanović, Armin, et al.
 Numerische Mathematik 156.3 (2024): 1115-1162.
 
 """
-function nosnoc_sliding_mode_ocp_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:heuristic_mean, rho_h=1e2)
+function nosnoc_sliding_mode_ocp_model(N, nfe, rk::RKScheme; big_M=1e5, step_eq=:heuristic_mean, rho_h=1e4)
     nh = N * nfe      # total number of finite elements
     nf = 2            # total number of nonsmooth modes
     nc = length(rk.c) # total number of intermediate integration points
