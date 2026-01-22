@@ -38,8 +38,8 @@ end
 =#
 
 @kwdef struct IpoptJuMP <: MPCCBenchmark.AbstractSolverSetup
-    linear_solver::String = "ma27"
-    max_iter::Int = 1000
+    linear_solver::String = "ma57"
+    max_iter::Int = 3000
     relaxation::Float64 = 1e-8
 end
 
@@ -72,8 +72,8 @@ end
 =#
 
 @kwdef struct MadNLPCJuMP <: MPCCBenchmark.AbstractSolverSetup
-    linear_solver = Ma27Solver
-    max_iter::Int = 1000
+    linear_solver = Ma57Solver
+    max_iter::Int = 3000
 end
 
 MPCCBenchmark.get_solver(solver::MadNLPCJuMP) = "madnlpc"
@@ -92,7 +92,8 @@ function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
         relaxation=MadMPEC.ScholtesRelaxation,
         relaxation_update=MadMPEC.RelaxLBUpdate(),
         use_magic_step=false,
-        use_specialized_barrier_update=false,
+        use_specialized_barrier_update=true,
+        center_complementarities=true,
     )
     solver = MadMPEC.MadNLPCSolver(
         mpcc;
@@ -102,6 +103,7 @@ function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
         max_iter=config.max_iter,
         tol=1e-8,
         linear_solver=config.linear_solver,
+        barrier=MadNLP.QualityFunctionUpdate(mu_max = 1.0, max_gs_iter=12),
     )
     stats = MadMPEC.solve_homotopy!(solver)
     # TODO: fix CC resid

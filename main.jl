@@ -15,7 +15,7 @@ const MATPOWER_DIR = "/home/fpacaud/dev/matpower/data/"
 const BENCHMARK_KEYS = Dict{String, MPCCBenchmark.AbstractBenchmarkSetting}(
     "pscc-pf" => MPCCBenchmark.PowerFlowBenchmark(MATPOWER_DIR),
     "pscc-scopf" => MPCCBenchmark.SCOPFBenchmark(MATPOWER_DIR),
-    "nosnoc" => MPCCBenchmark.NOSNOCBenchmark(MPCCBenchmark.RadauIIA(3)),
+    "nosnoc" => MPCCBenchmark.NOSNOCBenchmark(MPCCBenchmark.RadauIIA(2)),
 )
 
 const SOLVER_KEYS = Dict{String, MPCCBenchmark.AbstractSolverSetup}(

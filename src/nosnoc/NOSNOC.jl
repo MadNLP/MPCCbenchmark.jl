@@ -24,8 +24,7 @@ end
 function get_name(instance, ::NOSNOCBenchmark)
     func = instance[1]
     id = match(r"^nosnoc_(.*)_model", string(func)).captures[1]
-    k = prod(instance[2])
-    return "$(id)_$(k)"
+    return "$(id)_$(instance[2][1])_$(instance[2][2])"
 end
 
 function get_instances(bench::NOSNOCBenchmark)
