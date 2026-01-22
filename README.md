@@ -2,7 +2,7 @@
 
 A benchmark for large-scale mathematical programs with complementarity constraints (MPCCs).
 
-The instances are implemented in JuMP and reformulated with [ComplementOpt]()https://github.com/blegat/ComplementOpt.jl).
+The instances are implemented in JuMP and reformulated with [ComplementOpt](https://github.com/blegat/ComplementOpt.jl).
 
 The package implements the following benchmarks:
 
