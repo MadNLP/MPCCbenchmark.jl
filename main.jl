@@ -21,6 +21,7 @@ const BENCHMARK_KEYS = Dict{String, MPCCBenchmark.AbstractBenchmarkSetting}(
 const SOLVER_KEYS = Dict{String, MPCCBenchmark.AbstractSolverSetup}(
     "ipopt" => IpoptJuMP(),
     "madnlpc" => MadNLPCJuMP(max_iter=3000, linear_solver=Ma97Solver),#MadNLPCJuMP(linear_solver=Ma97Solver),
+    "madnlp_homotopy" => MadNLPHomotopyJuMP(),
 )
 
 function parse_args(args::Vector{String})

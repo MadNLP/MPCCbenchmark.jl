@@ -81,10 +81,8 @@ MPCCBenchmark.get_solver(solver::MadNLPCJuMP) = "madnlpc"
 function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
     ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_vertical!(model)
 
-    println(ind_cc1)
     ind_x1 = getfield.(ind_cc1, :value)
     ind_x2 = getfield.(ind_cc2, :value)
-    println(ind_x1)
 
     nlp = MathOptNLPModel(model)
     mpcc = MadMPEC.MPCCModelVarVar(nlp, ind_x1, ind_x2)
@@ -128,25 +126,22 @@ end
     MadNLP homotopy
 =#
 
-@kwdef struct MadNLPHomotopyJump <: MPCCBenchmark.AbstractSolverSetup
+@kwdef struct MadNLPHomotopyJuMP <: MPCCBenchmark.AbstractSolverSetup
     linear_solver = Ma27Solver
     max_iter::Int = 1000
 end
 
-MPCCBenchmark.get_solver(solver::MadNLPCJuMP) = "madnlpc"
+MPCCBenchmark.get_solver(solver::MadNLPHomotopyJuMP) = "madnlp_homotopy"
 
-function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
+function MPCCBenchmark.solve_model(config::MadNLPHomotopyJuMP, model)
     ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_vertical!(model)
 
-    println(ind_cc1)
     ind_x1 = getfield.(ind_cc1, :value)
     ind_x2 = getfield.(ind_cc2, :value)
-    println(ind_x1)
 
     nlp = MathOptNLPModel(model)
     mpcc = MadMPEC.MPCCModelVarVar(nlp, ind_x1, ind_x2)
 
-    println(mpcc.meta.ind_cc1)
     madnlpc_opts = MadMPEC.MadNLPCOptions(
         ;
         print_level=MadNLP.INFO,
@@ -156,18 +151,15 @@ function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
         use_specialized_barrier_update=true,
         #center_complementarities=true,
     )
-    solver = MadMPEC.MadNLPCSolver(
-        mpcc;
-        solver_opts=madnlpc_opts,
-        print_level=MadNLP.ERROR,
-        bound_relax_factor=0.0,
-        max_iter=config.max_iter,
-        tol=1e-8,
-        linear_solver=config.linear_solver,
-        #barrier=MadNLP.MonotoneUpdate(mu_init=1.0),
-        #barrier=MadNLP.QualityFunctionUpdate(mu_max = 1.0, max_gs_iter=12),
-    )
-    stats = MadMPEC.solve_homotopy!(solver)
+
+    homotopy_opts = MadMPEC.HomotopySolverOptions(max_inner_iter=config.max_iter)
+    homotopy_opts.nlp_solver_options = Dict(:bound_relax_factor=>0.0,
+                                          :print_level=>MadNLP.ERROR,
+                                          :linear_solver=>config.linear_solver,
+                                          :max_iter=>500)
+    solver = MadMPEC.HomotopySolver(mpcc, MadNLP.MadNLPSolver, homotopy_opts)
+
+    stats = MadMPEC.solve!(solver)
     # TODO: fix CC resid
     cc_resid = get_complementarity_residual(nlp, stats.solution, ind_x1, ind_x2)
     println("status = $(stats.status)")
@@ -178,6 +170,6 @@ function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
         Int(stats.status),
         stats.objective,
         stats.iter,
-        stats.counters.counters.total_time,
+        stats.wall_time,
     )
 end
