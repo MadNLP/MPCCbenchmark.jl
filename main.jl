@@ -10,7 +10,7 @@ using DelimitedFiles
 end
 
 const RESULTS_DIR = joinpath(@__DIR__, "results")
-const MATPOWER_DIR = "/home/fpacaud/dev/matpower/data/"
+const MATPOWER_DIR = "/home/anton/syscop/tools/matpower/data/"
 
 const BENCHMARK_KEYS = Dict{String, MPCCBenchmark.AbstractBenchmarkSetting}(
     "pscc-pf" => MPCCBenchmark.PowerFlowBenchmark(MATPOWER_DIR),
@@ -20,7 +20,7 @@ const BENCHMARK_KEYS = Dict{String, MPCCBenchmark.AbstractBenchmarkSetting}(
 
 const SOLVER_KEYS = Dict{String, MPCCBenchmark.AbstractSolverSetup}(
     "ipopt" => IpoptJuMP(),
-    "madnlpc" => MadNLPCJuMP(),
+    "madnlpc" => MadNLPCJuMP(max_iter=3000, linear_solver=Ma97Solver),#MadNLPCJuMP(linear_solver=Ma97Solver),
 )
 
 function parse_args(args::Vector{String})

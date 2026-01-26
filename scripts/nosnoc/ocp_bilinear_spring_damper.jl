@@ -7,9 +7,10 @@ using Plots
 ######
 # Import problem from MPCCBenchmark
 ######
-N = 100
+N = 30
 nfe = 2
-collocation = MPCCBenchmark.ImplicitEuler()  # 3 stages in MATLAB (n_s = 3)
+#collocation = MPCCBenchmark.ImplicitEuler()  # 3 stages in MATLAB (n_s = 3)
+collocation = MPCCBenchmark.RadauIIA(2)
 model = MPCCBenchmark.nosnoc_bilinear_spring_damper_model(N, nfe, collocation; step_eq=:heuristic_mean)
 
 
