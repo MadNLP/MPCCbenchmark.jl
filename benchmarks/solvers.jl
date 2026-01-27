@@ -87,12 +87,10 @@ function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
     nlp = MathOptNLPModel(model)
     mpcc = MadMPEC.MPCCModelVarVar(nlp, ind_x1, ind_x2)
 
-    println(mpcc.meta.ind_cc1)
     madnlpc_opts = MadMPEC.MadNLPCOptions(
         ;
         print_level=MadNLP.INFO,
         relaxation=MadMPEC.ScholtesRelaxation,
-        #relaxation_update=MadMPEC.RelaxLBUpdate(),
         use_magic_step=false,
         use_specialized_barrier_update=true,
         center_complementarities=true,
@@ -112,7 +110,7 @@ function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
     cc_resid = get_complementarity_residual(nlp, stats.solution, ind_x1, ind_x2)
     println("status = $(stats.status)")
     return (
-       \ NLPModels.get_nvar(nlp),
+        NLPModels.get_nvar(nlp),
         NLPModels.get_ncon(nlp),
         length(ind_cc1),
         Int(stats.status),
