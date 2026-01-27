@@ -128,7 +128,7 @@ end
 
 @kwdef struct MadNLPHomotopyJuMP <: MPCCBenchmark.AbstractSolverSetup
     linear_solver = Ma27Solver
-    max_iter::Int = 1000
+    max_iter::Int = 3000
 end
 
 MPCCBenchmark.get_solver(solver::MadNLPHomotopyJuMP) = "madnlp_homotopy"
@@ -142,21 +142,13 @@ function MPCCBenchmark.solve_model(config::MadNLPHomotopyJuMP, model)
     nlp = MathOptNLPModel(model)
     mpcc = MadMPEC.MPCCModelVarVar(nlp, ind_x1, ind_x2)
 
-    madnlpc_opts = MadMPEC.MadNLPCOptions(
-        ;
-        print_level=MadNLP.INFO,
-        relaxation=MadMPEC.ScholtesRelaxation,
-        #relaxation_update=MadMPEC.RelaxLBUpdate(),
-        use_magic_step=false,
-        use_specialized_barrier_update=true,
-        #center_complementarities=true,
-    )
 
     homotopy_opts = MadMPEC.HomotopySolverOptions(max_inner_iter=config.max_iter)
     homotopy_opts.nlp_solver_options = Dict(:bound_relax_factor=>0.0,
-                                          :print_level=>MadNLP.ERROR,
-                                          :linear_solver=>config.linear_solver,
-                                          :max_iter=>500)
+                                            :print_level=>MadNLP.ERROR,
+                                            :linear_solver=>config.linear_solver,
+                                            :max_iter=>config.max_iter,
+                                            :barrier=>MadNLP.QualityFunctionUpdate())
     solver = MadMPEC.HomotopySolver(mpcc, MadNLP.MadNLPSolver, homotopy_opts)
 
     stats = MadMPEC.solve!(solver)
