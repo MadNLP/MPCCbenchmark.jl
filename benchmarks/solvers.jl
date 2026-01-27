@@ -87,10 +87,10 @@ function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
     nlp = MathOptNLPModel(model)
     mpcc = MadMPEC.MPCCModelVarVar(nlp, ind_x1, ind_x2)
 
-    madnlpc_opts = MadMPEC.MadNLPCOptions(;
+    madnlpc_opts = MadMPEC.MadNLPCOptions(
+        ;
         print_level=MadNLP.INFO,
         relaxation=MadMPEC.ScholtesRelaxation,
-        relaxation_update=MadMPEC.RelaxLBUpdate(),
         use_magic_step=false,
         use_specialized_barrier_update=true,
         center_complementarities=true,
@@ -108,6 +108,7 @@ function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
     stats = MadMPEC.solve_homotopy!(solver)
     # TODO: fix CC resid
     cc_resid = get_complementarity_residual(nlp, stats.solution, ind_x1, ind_x2)
+    println("status = $(stats.status)")
     return (
         NLPModels.get_nvar(nlp),
         NLPModels.get_ncon(nlp),
@@ -119,3 +120,46 @@ function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
     )
 end
 
+#=
+    MadNLP homotopy
+=#
+
+@kwdef struct MadNLPHomotopyJuMP <: MPCCBenchmark.AbstractSolverSetup
+    linear_solver = Ma27Solver
+    max_iter::Int = 3000
+end
+
+MPCCBenchmark.get_solver(solver::MadNLPHomotopyJuMP) = "madnlp_homotopy"
+
+function MPCCBenchmark.solve_model(config::MadNLPHomotopyJuMP, model)
+    ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_vertical!(model)
+
+    ind_x1 = getfield.(ind_cc1, :value)
+    ind_x2 = getfield.(ind_cc2, :value)
+
+    nlp = MathOptNLPModel(model)
+    mpcc = MadMPEC.MPCCModelVarVar(nlp, ind_x1, ind_x2)
+
+
+    homotopy_opts = MadMPEC.HomotopySolverOptions(max_inner_iter=config.max_iter)
+    homotopy_opts.nlp_solver_options = Dict(:bound_relax_factor=>0.0,
+                                            :print_level=>MadNLP.ERROR,
+                                            :linear_solver=>config.linear_solver,
+                                            :max_iter=>config.max_iter,
+                                            :barrier=>MadNLP.QualityFunctionUpdate())
+    solver = MadMPEC.HomotopySolver(mpcc, MadNLP.MadNLPSolver, homotopy_opts)
+
+    stats = MadMPEC.solve!(solver)
+    # TODO: fix CC resid
+    cc_resid = get_complementarity_residual(nlp, stats.solution, ind_x1, ind_x2)
+    println("status = $(stats.status)")
+    return (
+        NLPModels.get_nvar(nlp),
+        NLPModels.get_ncon(nlp),
+        length(ind_cc1),
+        Int(stats.status),
+        stats.objective,
+        stats.iter,
+        stats.wall_time,
+    )
+end
