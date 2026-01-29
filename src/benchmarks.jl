@@ -36,7 +36,7 @@ function evaluate_model(
 )
     @info instance
     model = load_model(instance, benchmark)
-    results = solve_model(solver, model; options...)
+    results = solve_model(solver, model, get_name(instance, benchmark), introduce(benchmark,solver); options...)
     # N.B. *ALWAYS* call explicitly garbage collector
     #      to avoid annoying memory leak as GC was disable before.
     GC.gc(true)

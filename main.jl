@@ -44,6 +44,9 @@ function @main(args::Vector{String})
     if !isdir(RESULTS_DIR)
         mkdir(RESULTS_DIR)
     end
+    if !isdir(joinpath(RESULTS_DIR, MPCCBenchmark.introduce(benchmark, solver)))
+        mkdir(joinpath(RESULTS_DIR, MPCCBenchmark.introduce(benchmark, solver)))
+    end
 
     # Launch benchmark
     probs = MPCCBenchmark.get_instances(benchmark)
