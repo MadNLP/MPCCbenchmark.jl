@@ -45,7 +45,7 @@ end
 
 MPCCBenchmark.get_solver(solver::IpoptJuMP) = "ipopt-scholtes"
 
-function MPCCBenchmark.solve_model(solver::IpoptJuMP, model)
+function MPCCBenchmark.solve_model(solver::IpoptJuMP, model, name, benchname)
     JuMP.set_optimizer(model, () -> ComplementOpt.Optimizer(Ipopt.Optimizer()))
     MOI.set(model, ComplementOpt.RelaxationMethod(), ComplementOpt.ScholtesRelaxation(solver.relaxation))
     JuMP.set_optimizer_attribute(model, "mu_strategy", "adaptive")
@@ -73,12 +73,12 @@ end
 
 @kwdef struct MadNLPCJuMP <: MPCCBenchmark.AbstractSolverSetup
     linear_solver = Ma57Solver
-    max_iter::Int = 3000
+    max_iter::Int = 2000
 end
 
 MPCCBenchmark.get_solver(solver::MadNLPCJuMP) = "madnlpc"
 
-function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
+function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model, name, benchname;log_iters=true)
     ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_vertical!(model)
 
     ind_x1 = getfield.(ind_cc1, :value)
@@ -91,9 +91,10 @@ function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
         ;
         print_level=MadNLP.INFO,
         relaxation=MadMPEC.ScholtesRelaxation,
+        #relaxation_update=MadMPEC.RolloffRelaxationUpdate(rolloff_slope=2.26, rolloff_point=1e-10, rolloff_max=1.0),
         use_magic_step=false,
         use_specialized_barrier_update=true,
-        center_complementarities=true,
+        center_complementarities=false,
     )
     solver = MadMPEC.MadNLPCSolver(
         mpcc;
@@ -102,8 +103,10 @@ function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
         bound_relax_factor=0.0,
         max_iter=config.max_iter,
         tol=1e-8,
+        bound_push=1e-1,
         linear_solver=config.linear_solver,
-        barrier=MadNLP.QualityFunctionUpdate(mu_max = 1.0, max_gs_iter=12),
+        output_file=log_iters ? joinpath(@__DIR__, "..","results",benchname,"$(name).log") : "",
+        #barrier=MadNLP.QualityFunctionUpdate(mu_max = 1.0, max_gs_iter=12, sigma_min=1e-3, sigma_max=1e1),
     )
     stats = MadMPEC.solve_homotopy!(solver)
     # TODO: fix CC resid
@@ -125,13 +128,13 @@ end
 =#
 
 @kwdef struct MadNLPHomotopyJuMP <: MPCCBenchmark.AbstractSolverSetup
-    linear_solver = Ma27Solver
-    max_iter::Int = 3000
+    linear_solver = Ma57Solver
+    max_iter::Int = 2000
 end
 
 MPCCBenchmark.get_solver(solver::MadNLPHomotopyJuMP) = "madnlp_homotopy"
 
-function MPCCBenchmark.solve_model(config::MadNLPHomotopyJuMP, model)
+function MPCCBenchmark.solve_model(config::MadNLPHomotopyJuMP, model, name, benchname)
     ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_vertical!(model)
 
     ind_x1 = getfield.(ind_cc1, :value)
