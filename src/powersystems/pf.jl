@@ -57,12 +57,14 @@ function powerflow_model(data; load_factor=1.0)
 
     JuMP.@variable(model, va[i in 1:nbus], start=deg2rad(data.bus[i].va))
     JuMP.@variable(model, vm[i in 1:nbus], start=vm0[i])
-    JuMP.@variable(model, qmin[i] <= qg[i in pv_buses] <= qmax[i], start=qg0[i])
+    JuMP.@variable(model, qg[i in pv_buses] >= qmin[i], start=qg0[i])
+    JuMP.@variable(model, qg_s[i in pv_buses] >= -qmax[i], start=-qg0[i])
     JuMP.@variable(model, p[i in 1:narc])
     JuMP.@variable(model, q[i in 1:narc])
 
     # Complementarity variables for PV/PQ switches
-    JuMP.@variable(model, Δ[i in pv_buses])
+    JuMP.@variable(model, Δp[i in pv_buses]>=0)
+    JuMP.@variable(model, Δm[i in pv_buses]>=0)
 
     # Fix voltage angle and magnitude at ref node
     for b in ref_buses
@@ -71,8 +73,10 @@ function powerflow_model(data; load_factor=1.0)
     end
     # Encode PV/PQ switches at at PV nodes with complementarity constraints
     for b in pv_buses
-        @constraint(model, vm[b] == vm0[b]+ Δ[b])
-        @constraint(model, [Δ[b], qg[b]] ∈ MOI.Complements(2))
+        @constraint(model, vm[b] == vm0[b]+ Δp[b]-Δm[b])
+        @constraint(model, qg[b] == -qg_s[b])
+        @constraint(model, [Δm[b], qg_s[b]] ∈ MOI.Complements(2))
+        @constraint(model, [Δp[b], qg[b]] ∈ MOI.Complements(2))
     end
 
     # Power balance at PQ buses

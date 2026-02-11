@@ -72,7 +72,7 @@ end
 =#
 
 @kwdef struct MadNLPCJuMP <: MPCCBenchmark.AbstractSolverSetup
-    linear_solver = Ma57Solver
+    linear_solver = Ma97Solver
     max_iter::Int = 2000
 end
 
@@ -91,10 +91,10 @@ function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model, name, benchname;l
         ;
         print_level=MadNLP.INFO,
         relaxation=MadMPEC.ScholtesRelaxation,
-        relaxation_update=MadMPEC.RolloffRelaxationUpdate(rolloff_slope=2.5, rolloff_point=1e-12, rolloff_max=1.0),
+        #relaxation_update=MadMPEC.RolloffRelaxationUpdate(rolloff_slope=2.5, rolloff_point=1e-12, rolloff_max=1.0),
         use_magic_step=false,
         use_specialized_barrier_update=true,
-        center_complementarities=true,
+        center_complementarities=false,
     )
     solver = MadMPEC.MadNLPCSolver(
         mpcc;
