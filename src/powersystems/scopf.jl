@@ -54,30 +54,45 @@ function scopf_model(
 
     JuMP.@variable(model, va[i in 1:nbus, 1:K], start=deg2rad(data.bus[i].va))
     JuMP.@variable(model, data.bus[i].vmin <= vm[i in 1:nbus, 1:K] <= data.bus[i].vmax, start=data.bus[i].vm)
-    JuMP.@variable(model, data.gen[i].pmin <= pg[i in 1:ngen, 1:K] <= data.gen[i].pmax, start=data.gen[i].pg)
+    JuMP.@variable(model, pg[i in 1:ngen, 1:K] >= data.gen[i].pmin, start=data.gen[i].pg)
+    JuMP.@variable(model, pg_s[i in 1:ngen, 1:K] >= -data.gen[i].pmax, start=-data.gen[i].pg)
     # N.B. Aggregate the reactive power generations for the PV/PQ switches
-    JuMP.@variable(model, qmin[i] <= qg[i in [ref_buses; pv_buses], 1:K] <= qmax[i], start=qg0[i])
+    JuMP.@variable(model, qg[i in [ref_buses; pv_buses], 1:K] >= qmin[i], start=qg0[i])
+    JuMP.@variable(model, qg_s[i in [ref_buses; pv_buses], 1:K] >= -qmax[i], start=-qg0[i])
     JuMP.@variable(model, -data.arc[i].rate_a <= p[i in 1:narc, 1:K] <= data.arc[i].rate_a)
     JuMP.@variable(model, -data.arc[i].rate_a <= q[i in 1:narc, 1:K] <= data.arc[i].rate_a)
     # Automatic adjustment of generators
     JuMP.@variable(model, Δ[1:K-1])
     # Switches
-    JuMP.@variable(model, γ[i in 1:ngen, 2:K])
-    JuMP.@variable(model, λ[i in [ref_buses; pv_buses], 2:K])
+    JuMP.@variable(model, γp[i in 1:ngen, 2:K] >= 0)
+    JuMP.@variable(model, γm[i in 1:ngen, 2:K] >= 0)
+    JuMP.@variable(model, λp[i in [ref_buses; pv_buses], 2:K] >= 0)
+    JuMP.@variable(model, λm[i in [ref_buses; pv_buses], 2:K] >= 0)
 
     JuMP.@objective(model, Min, scale_obj * sum(data.gen[i].c[1]*pg[i, 1]^2 + data.gen[i].c[2]*pg[i, 1] + data.gen[i].c[3] for i in 1:ngen))
 
+    for k in 1:K
+        for i in 1:ngen
+            @constraint(model, pg[i,k] == -pg_s[i,k])
+        end
+        for i in [ref_buses; pv_buses]
+            @constraint(model, qg[i,k] == -qg_s[i,k])
+        end
+    end
+    
     for k in 2:K
         # Droop control
         for i in 1:ngen
-            @constraint(model, pg[i, k] == pg[i, 1] + alpha[i] * Δ[k-1] + γ[i, k])
-            @constraint(model, [γ[i, k], pg[i, k]] in MOI.Complements(2))
+            @constraint(model, pg[i, k] == pg[i, 1] + alpha[i] * Δ[k-1] + γp[i, k] - γm[i, k])
+            @constraint(model, [γp[i, k], pg[i, k]] in MOI.Complements(2))
+            @constraint(model, [γm[i, k], pg_s[i, k]] in MOI.Complements(2))
         end
         # PV/PQ switches
         # N.B. : we allow the reference buses to switch as well
         for b in [ref_buses; pv_buses]
-            @constraint(model, vm[b, k] == vm[b, 1] + λ[b, k])
-            @constraint(model, [λ[b, k], qg[b, k]] in MOI.Complements(2))
+            @constraint(model, vm[b, k] == vm[b, 1] + λp[b, k] - λm[b, k])
+            @constraint(model, [λp[b, k], qg[b, k]] in MOI.Complements(2))
+            @constraint(model, [λm[b, k], qg_s[b, k]] in MOI.Complements(2))
         end
     end
 
