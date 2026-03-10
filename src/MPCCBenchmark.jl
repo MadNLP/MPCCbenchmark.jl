@@ -5,6 +5,8 @@ using JuMP
 import ComplementOpt
 import ExaPowerIO
 
+const MOIU = MOI.Utilities
+
 # Utils
 include("MOI_utils.jl")
 # Benchmarks

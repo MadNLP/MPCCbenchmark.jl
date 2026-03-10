@@ -9,7 +9,7 @@ using Ipopt
     include("nosnoc.jl")
 end
 
-#@testset "Power systems" begin
-#    include("scopf.jl")
-#end
+@testset "Power systems" begin
+    include("powersystems.jl")
+end
 
