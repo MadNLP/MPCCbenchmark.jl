@@ -36,8 +36,24 @@ end
     MOI.set(model, ComplementOpt.RelaxationMethod(), ComplementOpt.ScholtesRelaxation(1e-7))
     JuMP.set_optimizer_attribute(model, "mu_strategy", "adaptive")
     JuMP.set_optimizer_attribute(model, "bound_relax_factor", 0.0)
+    JuMP.set_silent(model)
     JuMP.optimize!(model)
 
     @test JuMP.is_solved_and_feasible(model)
 end
 
+@testset "[PowerSystems] Manual model $(JuMP.name(model))" for model in [
+    case14_scopf_model(),
+    case14_pf_model(),
+]
+    relaxation = ComplementOpt.ScholtesRelaxation(1e-7)
+    ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_standard_form!(JuMP.backend(model))
+    MPCCBenchmark.reformulate_to_nonlinear!(JuMP.backend(model), relaxation)
+    JuMP.set_optimizer(model ,Ipopt.Optimizer)
+    JuMP.set_optimizer_attribute(model, "mu_strategy", "adaptive")
+    JuMP.set_optimizer_attribute(model, "bound_relax_factor", 0.0)
+    JuMP.set_silent(model)
+    JuMP.optimize!(model)
+
+    @test JuMP.is_solved_and_feasible(model)
+end
