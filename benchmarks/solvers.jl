@@ -79,8 +79,8 @@ end
 MPCCBenchmark.get_solver(solver::MadNLPCJuMP) = "madnlpc"
 
 function MPCCBenchmark.solve_model(config::MadNLPCJuMP, model)
-    ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_vertical!(model)
-
+    model = MPCCBenchmark.reformulate_to_vertical!(JuMP.backend(model))
+    ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_standard_form!(model)
     ind_x1 = getfield.(ind_cc1, :value)
     ind_x2 = getfield.(ind_cc2, :value)
 
@@ -132,7 +132,8 @@ end
 MPCCBenchmark.get_solver(solver::MadNLPHomotopyJuMP) = "madnlp_homotopy"
 
 function MPCCBenchmark.solve_model(config::MadNLPHomotopyJuMP, model)
-    ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_vertical!(model)
+    model = MPCCBenchmark.reformulate_to_vertical!(JuMP.backend(model))
+    ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_standard_form!(model)
 
     ind_x1 = getfield.(ind_cc1, :value)
     ind_x2 = getfield.(ind_cc2, :value)
