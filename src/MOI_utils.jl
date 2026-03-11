@@ -34,7 +34,17 @@ end
 """
     reformulate_to_standard_form!(model::ModelLike)
 
-The mixed-complementarity constraints ``x1 ⟂ (lb <= x2 <= ub)`` is rewriten with slack variables as
+Reformulate the mixed-complementarity constraints ``x1 ⟂ (lb <= x2 <= ub)`` with slack variables.
+
+If `support_lb=true`, the mixed-complementarity constraints are reformulated as:
+```
+x2n = ub - x2
+x1 = x1p - x1n
+0 <= x1p ⟂ x2  >= lb
+0 <= x1n ⟂ x2n >= 0
+
+```
+Otherwise, if `support_lb=false`, a slack `x2p` is added to the problem:
 ```
 x2p = x2 - lb
 x2n = ub - x2
@@ -46,7 +56,7 @@ x1 = x1p - x1n
 
 The function assumes the model is passed in vertical form, and returns an error otherwise.
 """
-function reformulate_to_standard_form!(model::MOI.ModelLike)
+function reformulate_to_standard_form!(model::MOI.ModelLike; support_lb=true)
     cc_cons = MOI.get(model, MOI.ListOfConstraintIndices{MOI.VectorOfVariables, MOI.Complements}())
     ind_cc1, ind_cc2 = MOI.VariableIndex[], MOI.VariableIndex[]
 
@@ -77,7 +87,7 @@ function reformulate_to_standard_form!(model::MOI.ModelLike)
                     MOI.add_constraint(model, x1, MOI.GreaterThan(0.0))
                 end
                 # Add a slack x2p = x2 - lb2 if lb2 ≠ 0
-                if !iszero(lb2)
+                if !support_lb && !iszero(lb2)
                     x2p, _ = MOI.add_constrained_variable(model, MOI.GreaterThan(0.0))
                     MOI.add_constraint(
                         model,
@@ -129,7 +139,7 @@ function reformulate_to_standard_form!(model::MOI.ModelLike)
                     MOI.EqualTo(0.0),
                 )
                 push!(ind_cc1, x1p)
-                if !iszero(lb2)
+                if !support_lb && !iszero(lb2)
                     # Add a slack x2p = x2 - lb2 if lb2 ≠ 0
                     x2p, _ = MOI.add_constrained_variable(model, MOI.GreaterThan(0.0))
                     MOI.add_constraint(
