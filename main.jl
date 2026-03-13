@@ -20,7 +20,7 @@ const BENCHMARK_KEYS = Dict{String, MPCCBenchmark.AbstractBenchmarkSetting}(
 
 const SOLVER_KEYS = Dict{String, MPCCBenchmark.AbstractSolverSetup}(
     "ipopt" => IpoptJuMP(),
-    "madnlpc" => MadNLPCJuMP(),
+    "madnlpc" => CCOptRelaxationJuMP(),
     "madnlp_homotopy" => MadNLPHomotopyJuMP(),
 )
 
