@@ -12,7 +12,7 @@ end
 
 # benchmark = MPCCBenchmark.PowerFlowBenchmark("/home/fpacaud/dev/matpower/data/")
 benchmark = MPCCBenchmark.NOSNOCBenchmark(MPCCBenchmark.RadauIIA(2))
-solver = MadNLPCJuMP()
+solver = CCOptRelaxationJuMP()
 results = MPCCBenchmark.run_benchmark(benchmark, solver)
 dump_file = "$(MPCCBenchmark.introduce(benchmark, solver)).csv"
 writedlm(joinpath(RESULTS_DIR, dump_file), results)

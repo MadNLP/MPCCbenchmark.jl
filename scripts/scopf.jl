@@ -8,7 +8,7 @@ using ExaPowerIO
 using LinearAlgebra
 
 using MadNLP, MadNLPHSL
-using MadMPEC
+using CCOpt
 using NLPModelsJuMP
 
 const MOIU = MOI.Utilities
@@ -28,23 +28,23 @@ model = MPCCBenchmark.scopf_model(data, contingencies)
 ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_standard_form!(JuMP.backend(model))
 
 ######
-# Convert problem in MadMPEC format
+# Convert problem in CCOpt format
 ######
 # Get evaluator as NLPModels
 nlp = MathOptNLPModel(model)
 # Build a MPCC problem
-mpcc = MadMPEC.MPCCModelVarVar(nlp, getfield.(ind_cc1, :value), getfield.(ind_cc2, :value))
+mpcc = CCOpt.MPCCModelVarVar(nlp, getfield.(ind_cc1, :value), getfield.(ind_cc2, :value))
 
 ######
-# Solve problem with MadMPEC
+# Solve problem with CCOpt
 #####
-madnlpc_opts = MadMPEC.MadNLPCOptions(;
+madnlpc_opts = CCOpt.RelaxationOptions(;
     print_level=MadNLP.INFO,
-    relaxation=MadMPEC.ScholtesRelaxation,
+    relaxation=CCOpt.ScholtesRelaxation,
     use_magic_step=false,
     use_specialized_barrier_update=false,
 )
-solver = MadMPEC.MadNLPCSolver(
+solver = CCOpt.RelaxationSolver(
     mpcc;
     solver_opts=madnlpc_opts,
     print_level=MadNLP.INFO,
@@ -52,4 +52,4 @@ solver = MadMPEC.MadNLPCSolver(
     tol=1e-8,
     linear_solver=Ma27Solver,
 )
-stats = MadMPEC.solve_homotopy!(solver)
+stats = CCOpt.solve_homotopy!(solver)
