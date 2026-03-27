@@ -5,9 +5,10 @@ using Ipopt
 using HSL_jll
 using MadNLP
 using MadNLPHSL
+using MadNCL
 using CCOpt
 using NLPModels
-using NLPModelsJuMP
+using ExaModels
 using LinearAlgebra
 
 function get_complementarity_residual(model::JuMP.Model, ind_cc1, ind_cc2)
@@ -71,20 +72,21 @@ end
     CCOpt Relaxation solver
 =#
 
-@kwdef struct CCOptRelaxationJuMP <: MPCCBenchmark.AbstractSolverSetup
+@kwdef struct CCOptRelaxation <: MPCCBenchmark.AbstractSolverSetup
     linear_solver = Ma57Solver
     max_iter::Int = 3000
+    tol::Float64 = 1e-8
 end
 
-MPCCBenchmark.get_solver(solver::CCOptRelaxationJuMP) = "madnlpc"
+MPCCBenchmark.get_solver(solver::CCOptRelaxation) = "ccopt-relaxation"
 
-function MPCCBenchmark.solve_model(config::CCOptRelaxationJuMP, model)
+function MPCCBenchmark.solve_model(config::CCOptRelaxation, model)
     model = MPCCBenchmark.reformulate_to_vertical!(JuMP.backend(model))
     ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_standard_form!(model)
     ind_x1 = getfield.(ind_cc1, :value)
     ind_x2 = getfield.(ind_cc2, :value)
 
-    nlp = MathOptNLPModel(model)
+    nlp = ExaModel(model)
     mpcc = CCOpt.MPCCModelVarVar(nlp, ind_x1, ind_x2)
 
     madnlpc_opts = CCOpt.RelaxationOptions(
@@ -129,18 +131,17 @@ end
     max_iter::Int = 3000
 end
 
-MPCCBenchmark.get_solver(solver::MadNLPHomotopyJuMP) = "madnlp_homotopy"
+MPCCBenchmark.get_solver(solver::MadNCLSolver) = "madncl"
 
-function MPCCBenchmark.solve_model(config::MadNLPHomotopyJuMP, model)
+function MPCCBenchmark.solve_model(config::MadNCLSolver, model)
     model = MPCCBenchmark.reformulate_to_vertical!(JuMP.backend(model))
     ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_standard_form!(model)
 
     ind_x1 = getfield.(ind_cc1, :value)
     ind_x2 = getfield.(ind_cc2, :value)
 
-    nlp = MathOptNLPModel(model)
+    nlp = ExaModel(model)
     mpcc = CCOpt.MPCCModelVarVar(nlp, ind_x1, ind_x2)
-
 
     homotopy_opts = CCOpt.HomotopySolverOptions(max_inner_iter=config.max_iter)
     homotopy_opts.nlp_solver_options = Dict(:bound_relax_factor=>0.0,
@@ -153,7 +154,6 @@ function MPCCBenchmark.solve_model(config::MadNLPHomotopyJuMP, model)
     stats = CCOpt.solve!(solver)
     # TODO: fix CC resid
     cc_resid = get_complementarity_residual(nlp, stats.solution, ind_x1, ind_x2)
-    println("status = $(stats.status)")
     return (
         NLPModels.get_nvar(nlp),
         NLPModels.get_ncon(nlp),
@@ -164,3 +164,55 @@ function MPCCBenchmark.solve_model(config::MadNLPHomotopyJuMP, model)
         stats.wall_time,
     )
 end
+
+#=
+    MadNCL
+=#
+
+@kwdef struct MadNCLSolver <: MPCCBenchmark.AbstractSolverSetup
+    linear_solver = Ma57Solver
+    max_iter::Int = 3000
+    tol::Float64 = 1e-6
+end
+
+MPCCBenchmark.get_solver(solver::MadNCLSolver) = "madncl"
+
+function MPCCBenchmark.solve_model(config::MadNCLSolver, model)
+    model = MPCCBenchmark.reformulate_to_vertical!(JuMP.backend(model))
+    ind_cc1, ind_cc2 = MPCCBenchmark.reformulate_to_standard_form!(model)
+    MOI.add_constraint(JuMP.backend(model), [ind_cc1; ind_cc2] , MOI.Complements(ncc))
+    MPCCBenchmark.reformulate_to_nonlinear!(JuMP.backend(model), ComplementOpt.ScholtesRelaxation(0.0))
+
+    nlp = ExaModel(model)
+    ncl_options = MadNCL.NCLOptions{Float64}(;
+        opt_tol=config.tol,
+        feas_tol=config.tol,
+        scaling=true,
+        scaling_max_gradient=100.0,
+        extrapolation=true,
+        verbose=false,
+    )
+
+    stats = @time MadNCL.madncl(
+        nlp;
+        ncl_options=ncl_options,
+        linear_solver=Ma57Solver,
+        print_level=MadNLP.ERROR,
+        richardson_tol=1e-12,
+        richardson_max_iter=20,
+        max_iter=1000,
+        kkt_system=MadNCL.K2rAuglagKKTSystem,
+    )
+
+    cc_resid = get_complementarity_residual(nlp, stats.solution, ind_x1, ind_x2)
+    return (
+        NLPModels.get_nvar(nlp),
+        NLPModels.get_ncon(nlp),
+        length(ind_cc1),
+        Int(stats.status),
+        stats.objective,
+        stats.iter,
+        stats.wall_time,
+    )
+end
+
